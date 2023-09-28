@@ -9,7 +9,7 @@ module Invidious::Routes::Channels
     data = self.fetch_basic_information(env)
     return data if !data.is_a?(Tuple)
 
-    locale, user, subscriptions, continuation, ucid, channel = data
+    locale, user, subscriptions, continuation, ucid, channel, prev = data
 
     sort_by = env.params.query["sort_by"]?.try &.downcase
 
@@ -46,7 +46,7 @@ module Invidious::Routes::Channels
     data = self.fetch_basic_information(env)
     return data if !data.is_a?(Tuple)
 
-    locale, user, subscriptions, continuation, ucid, channel = data
+    locale, user, subscriptions, continuation, ucid, channel, prev = data
 
     if !channel.tabs.includes? "shorts"
       return env.redirect "/channel/#{channel.ucid}"
@@ -69,7 +69,7 @@ module Invidious::Routes::Channels
     data = self.fetch_basic_information(env)
     return data if !data.is_a?(Tuple)
 
-    locale, user, subscriptions, continuation, ucid, channel = data
+    locale, user, subscriptions, continuation, ucid, channel, prev = data
 
     if !channel.tabs.includes? "streams"
       return env.redirect "/channel/#{channel.ucid}"
@@ -92,7 +92,7 @@ module Invidious::Routes::Channels
     data = self.fetch_basic_information(env)
     return data if !data.is_a?(Tuple)
 
-    locale, user, subscriptions, continuation, ucid, channel = data
+    locale, user, subscriptions, continuation, ucid, channel, prev = data
 
     sort_options = {"last", "oldest", "newest"}
     sort_by = env.params.query["sort_by"]?.try &.downcase
@@ -116,7 +116,7 @@ module Invidious::Routes::Channels
     data = self.fetch_basic_information(env)
     return data if !data.is_a?(Tuple)
 
-    locale, user, subscriptions, continuation, ucid, channel = data
+    locale, user, subscriptions, continuation, ucid, channel, prev = data
 
     sort_by = ""
     sort_options = [] of String
@@ -136,7 +136,7 @@ module Invidious::Routes::Channels
     data = self.fetch_basic_information(env)
     return data if !data.is_a?(Tuple)
 
-    locale, user, subscriptions, continuation, ucid, channel = data
+    locale, user, subscriptions, continuation, ucid, channel, prev = data
 
     sort_by = ""
     sort_options = [] of String
@@ -157,7 +157,7 @@ module Invidious::Routes::Channels
     if !data.is_a?(Tuple)
       return data
     end
-    locale, user, subscriptions, continuation, ucid, channel = data
+    locale, user, subscriptions, continuation, ucid, channel, prev = data
 
     thin_mode = env.params.query["thin_mode"]? || env.get("preferences").as(Preferences).thin_mode
     thin_mode = thin_mode == "true"
@@ -191,7 +191,7 @@ module Invidious::Routes::Channels
     data = self.fetch_basic_information(env)
     return data if !data.is_a?(Tuple)
 
-    locale, user, subscriptions, continuation, ucid, channel = data
+    locale, user, subscriptions, continuation, ucid, channel, prev = data
 
     if channel.auto_generated
       return env.redirect "/channel/#{channel.ucid}"
@@ -212,7 +212,7 @@ module Invidious::Routes::Channels
     if !data.is_a?(Tuple)
       return data
     end
-    locale, user, subscriptions, continuation, ucid, channel = data
+    locale, user, subscriptions, continuation, ucid, channel, prev = data
 
     env.redirect "/channel/#{ucid}"
   end
@@ -307,6 +307,7 @@ module Invidious::Routes::Channels
 
     ucid = env.params.url["ucid"]
     continuation = env.params.query["continuation"]?
+    prev = env.params.query["prev"]?
 
     begin
       channel = get_about_info(ucid, locale)
@@ -319,6 +320,6 @@ module Invidious::Routes::Channels
     end
 
     env.set "search", "channel:#{ucid} "
-    return {locale, user, subscriptions, continuation, ucid, channel}
+    return {locale, user, subscriptions, continuation, ucid, channel, prev}
   end
 end
