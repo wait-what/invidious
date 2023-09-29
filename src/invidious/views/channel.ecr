@@ -19,16 +19,18 @@
   redirect_url = Invidious::Frontend::Misc.redirect_url(env)
 
   prev = Array(String).new
-  cookies_header = env.request.headers["Cookie"]
-  cookies = cookies_header.split("; ")
-  i = 0
-  while i < cookies.size
-    cookie = cookies[i]
-    if cookie.starts_with?("prev")
-      cookie_save = cookie
-      prev.push(cookie.split('=')[1])
+  cookies_header = env.request.headers["Cookie"]?
+  if !cookies_header.nil?
+    cookies = cookies_header.split("; ")
+    i = 0
+    while i < cookies.size
+      cookie = cookies[i]
+      if cookie.starts_with?("prev")
+        cookie_save = cookie
+        prev.push(cookie.split('=')[1])
+      end
+      i += 1
     end
-    i += 1
   end
 
   if page.nil?
