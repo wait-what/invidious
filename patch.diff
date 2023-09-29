@@ -1,0 +1,225 @@
+diff --git a/src/invidious/frontend/pagination.cr b/src/invidious/frontend/pagination.cr
+index 8355545f..11fc3236 100644
+--- a/src/invidious/frontend/pagination.cr
++++ b/src/invidious/frontend/pagination.cr
+@@ -72,29 +72,23 @@ module Invidious::Frontend::Pagination
+     end
+   end
+ 
+-  def nav_ctoken(locale : String?, *, base_url : String | URI, ctoken : String?, cctoken : String?, prev : String?)
++  def nav_ctoken(env, locale : String?, *, base_url : String | URI, ctoken : String?, cctoken : String?, prev : Array(String), page : Int32)
+     return String.build do |str|
+       str << %(<div class="h-box">\n)
+       str << %(<div class="page-nav-container flexible">\n)
+ 
+       str << %(<div class="page-prev-container flex-left">)
+ 
+-      if !prev.nil?
+-        prev_copy = Array(String).from_json(prev)
+-	if prev_copy.size == 1
+-	  previous_ctoken = prev_copy.pop
+-          params_prev = URI::Params{"continuation" => previous_ctoken}
+-	else
+-          previous_ctoken = prev_copy.pop
+-          prev_before = prev_copy.to_json
+-          params_prev = URI::Params{"continuation" => previous_ctoken, "prev" => prev_before}
+-        end
++      if !prev.empty? && !cctoken.nil? && page >= 2
++        page_copy = page
++        page_copy -= 1
++        params_prev = URI::Params{"continuation" => prev[page_copy - 1], "page" => page_copy.to_s}
+         url_prev = HttpServer::Utils.add_params_to_url(base_url, params_prev)
+ 
+         self.previous_page(str, locale, url_prev.to_s)
+       end
+ 
+-      if prev.nil? && !cctoken.nil?
++      if !cctoken.nil? && page == 1
+         self.previous_page(str, locale, base_url)
+       end
+ 
+@@ -102,28 +96,32 @@ module Invidious::Frontend::Pagination
+ 
+       str << %(<div class="page-next-container flex-right">)
+ 
+-      if !ctoken.nil? && !prev.nil? && !cctoken.nil?
+-        prev_copy1 = Array(String).from_json(prev)
+-        prev_copy1.push(cctoken)
+-	prev_after = prev_copy1.to_json
+-        params_next = URI::Params{"continuation" => ctoken, "prev" => prev_after}
++      if !ctoken.nil? && cctoken.nil? && page == 0
++        page_copy1 = page
++        page_copy1 = 1
++        params_next = URI::Params{"continuation" => ctoken, "page" => page_copy1.to_s}
+         url_next = HttpServer::Utils.add_params_to_url(base_url, params_next)
+ 
+         self.next_page(str, locale, url_next.to_s)
+       end
+ 
+-      if !ctoken.nil? && prev.nil? && !cctoken.nil?
+-        prev_copy1 = Array(String).new
+-	prev_copy1.push(cctoken)
+-        prev_after = prev_copy1.to_json
+-        params_next = URI::Params{"continuation" => ctoken, "prev" => prev_after}
++      if !ctoken.nil? && !cctoken.nil? && page == 1
++        prev_after = cctoken
++        env.response.headers["Set-Cookie"] = "prev#{page - 1}=#{prev_after}"
++        page_copy1 = page
++        page_copy1 = 2
++        params_next = URI::Params{"continuation" => ctoken, "page" => page_copy1.to_s}
+         url_next = HttpServer::Utils.add_params_to_url(base_url, params_next)
+ 
+         self.next_page(str, locale, url_next.to_s)
+       end
+ 
+-      if !ctoken.nil? && prev.nil? && cctoken.nil?
+-        params_next = URI::Params{"continuation" => ctoken}
++      if !ctoken.nil? && !cctoken.nil? && page >= 2 && !prev.empty?
++        prev_after = cctoken
++        env.response.headers["Set-Cookie"] = "prev#{page - 1}=#{prev_after}"
++        page_copy1 = page
++        page_copy1 += 1
++        params_next = URI::Params{"continuation" => ctoken, "page" => page_copy1.to_s}
+         url_next = HttpServer::Utils.add_params_to_url(base_url, params_next)
+ 
+         self.next_page(str, locale, url_next.to_s)
+diff --git a/src/invidious/routes/channels.cr b/src/invidious/routes/channels.cr
+index 126e3262..96059b87 100644
+--- a/src/invidious/routes/channels.cr
++++ b/src/invidious/routes/channels.cr
+@@ -9,7 +9,7 @@ module Invidious::Routes::Channels
+     data = self.fetch_basic_information(env)
+     return data if !data.is_a?(Tuple)
+ 
+-    locale, user, subscriptions, continuation, ucid, channel, prev = data
++    locale, user, subscriptions, continuation, ucid, channel, page = data
+ 
+     sort_by = env.params.query["sort_by"]?.try &.downcase
+ 
+@@ -46,7 +46,7 @@ module Invidious::Routes::Channels
+     data = self.fetch_basic_information(env)
+     return data if !data.is_a?(Tuple)
+ 
+-    locale, user, subscriptions, continuation, ucid, channel, prev = data
++    locale, user, subscriptions, continuation, ucid, channel, page = data
+ 
+     if !channel.tabs.includes? "shorts"
+       return env.redirect "/channel/#{channel.ucid}"
+@@ -69,7 +69,7 @@ module Invidious::Routes::Channels
+     data = self.fetch_basic_information(env)
+     return data if !data.is_a?(Tuple)
+ 
+-    locale, user, subscriptions, continuation, ucid, channel, prev = data
++    locale, user, subscriptions, continuation, ucid, channel, page = data
+ 
+     if !channel.tabs.includes? "streams"
+       return env.redirect "/channel/#{channel.ucid}"
+@@ -92,7 +92,7 @@ module Invidious::Routes::Channels
+     data = self.fetch_basic_information(env)
+     return data if !data.is_a?(Tuple)
+ 
+-    locale, user, subscriptions, continuation, ucid, channel, prev = data
++    locale, user, subscriptions, continuation, ucid, channel, page = data
+ 
+     sort_options = {"last", "oldest", "newest"}
+     sort_by = env.params.query["sort_by"]?.try &.downcase
+@@ -116,7 +116,7 @@ module Invidious::Routes::Channels
+     data = self.fetch_basic_information(env)
+     return data if !data.is_a?(Tuple)
+ 
+-    locale, user, subscriptions, continuation, ucid, channel, prev = data
++    locale, user, subscriptions, continuation, ucid, channel, page = data
+ 
+     sort_by = ""
+     sort_options = [] of String
+@@ -136,7 +136,7 @@ module Invidious::Routes::Channels
+     data = self.fetch_basic_information(env)
+     return data if !data.is_a?(Tuple)
+ 
+-    locale, user, subscriptions, continuation, ucid, channel, prev = data
++    locale, user, subscriptions, continuation, ucid, channel, page = data
+ 
+     sort_by = ""
+     sort_options = [] of String
+@@ -157,7 +157,7 @@ module Invidious::Routes::Channels
+     if !data.is_a?(Tuple)
+       return data
+     end
+-    locale, user, subscriptions, continuation, ucid, channel, prev = data
++    locale, user, subscriptions, continuation, ucid, channel, page = data
+ 
+     thin_mode = env.params.query["thin_mode"]? || env.get("preferences").as(Preferences).thin_mode
+     thin_mode = thin_mode == "true"
+@@ -191,7 +191,7 @@ module Invidious::Routes::Channels
+     data = self.fetch_basic_information(env)
+     return data if !data.is_a?(Tuple)
+ 
+-    locale, user, subscriptions, continuation, ucid, channel, prev = data
++    locale, user, subscriptions, continuation, ucid, channel, page = data
+ 
+     if channel.auto_generated
+       return env.redirect "/channel/#{channel.ucid}"
+@@ -212,7 +212,7 @@ module Invidious::Routes::Channels
+     if !data.is_a?(Tuple)
+       return data
+     end
+-    locale, user, subscriptions, continuation, ucid, channel, prev = data
++    locale, user, subscriptions, continuation, ucid, channel, page = data
+ 
+     env.redirect "/channel/#{ucid}"
+   end
+@@ -307,7 +307,8 @@ module Invidious::Routes::Channels
+ 
+     ucid = env.params.url["ucid"]
+     continuation = env.params.query["continuation"]?
+-    prev = env.params.query["prev"]?
++
++    page = env.params.query["page"]?
+ 
+     begin
+       channel = get_about_info(ucid, locale)
+@@ -320,6 +321,6 @@ module Invidious::Routes::Channels
+     end
+ 
+     env.set "search", "channel:#{ucid} "
+-    return {locale, user, subscriptions, continuation, ucid, channel, prev}
++    return {locale, user, subscriptions, continuation, ucid, channel, page}
+   end
+ end
+diff --git a/src/invidious/views/channel.ecr b/src/invidious/views/channel.ecr
+index d813a9dd..d6af0e01 100644
+--- a/src/invidious/views/channel.ecr
++++ b/src/invidious/views/channel.ecr
+@@ -18,11 +18,30 @@
+   youtube_url = "https://www.youtube.com#{relative_url}"
+   redirect_url = Invidious::Frontend::Misc.redirect_url(env)
+ 
+-  page_nav_html = IV::Frontend::Pagination.nav_ctoken(locale,
++  prev = Array(String).new
++  cookies_header = env.request.headers["Cookie"]
++  cookies = cookies_header.split("; ")
++  i = 0
++  while i < cookies.size
++    cookie = cookies[i]
++    if cookie.starts_with?("prev")
++      cookie_save = cookie
++      prev.push(cookie.split('=')[1])
++    end
++    i += 1
++  end
++
++  if page.nil?
++    page = 0
++  end
++  page = page.to_i
++
++  page_nav_html = IV::Frontend::Pagination.nav_ctoken(env,locale,
+     base_url: relative_url,
+     ctoken: next_continuation,
+     cctoken: continuation,
+-    prev: prev
++    prev: prev,
++    page: page
+   )
+ %>
+ 
