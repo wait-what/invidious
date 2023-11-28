@@ -88,6 +88,11 @@ def extract_video_info(video_id : String, proxy_region : String? = nil)
     # YouTube may return a different video player response than expected.
     # See: https://github.com/TeamNewPipe/NewPipe/issues/8713
     # Line to be reverted if one day we solve the video not available issue.
+
+    # Although technically not a call to /videoplayback the fact that YouTube is returning the
+    # wrong video means that we should count it as a failure.
+    get_playback_statistic()["totalRequests"] += 1
+
     return {
       "version" => JSON::Any.new(Video::SCHEMA_VERSION.to_i64),
       "reason"  => JSON::Any.new("Can't load the video on this Invidious instance. YouTube is currently trying to block Invidious instances. <a href=\"https://github.com/iv-org/invidious/issues/3822\">Click here for more info about the issue.</a>"),
@@ -147,9 +152,8 @@ end
 
 def try_fetch_streaming_data(id : String, client_config : YoutubeAPI::ClientConfig) : Hash(String, JSON::Any)?
   LOGGER.debug("try_fetch_streaming_data: [#{id}] Using #{client_config.client_type} client.")
-  # CgIQBg is a workaround for streaming URLs that returns a 403.
-  # See https://github.com/iv-org/invidious/issues/4027#issuecomment-1666944520
-  response = YoutubeAPI.player(video_id: id, params: "CgIQBg", client_config: client_config)
+  # 2AMBCgIQBg is a workaround for streaming URLs that returns a 403.
+  response = YoutubeAPI.player(video_id: id, params: "2AMBCgIQBg", client_config: client_config)
 
   playability_status = response["playabilityStatus"]["status"]
   LOGGER.debug("try_fetch_streaming_data: [#{id}] Got playabilityStatus == #{playability_status}.")
